@@ -1,0 +1,229 @@
+<!doctype html>
+<html lang="pt_BR">
+
+<head>
+    <meta charset="UTF-8" />
+    <title>Making your first Phaser 3 Game - Part 10</title>
+    <script src="//cdn.jsdelivr.net/npm/phaser@3.11.0/dist/phaser.js"></script>
+    <style type="text/css">
+        body {
+            margin: 0;
+        }
+    </style>
+</head>
+
+<body>
+
+    <script type="text/javascript">
+
+        var config = {
+            type: Phaser.AUTO,
+            width: 800,
+            height: 600,
+            physics: {
+                default: 'arcade',
+                arcade: {
+                    gravity: { y: 300 },
+                    debug: false
+                }
+            },
+            scene: {
+                preload: preload,
+                create: create,
+                update: update
+            }
+        };
+
+        var player;
+        var stars;
+        var bombs;
+        var platforms;
+        var cursors;
+        var score = 0;
+        var gameOver = false;
+        var scoreText;
+        var gameOverText;
+        var restartText;
+
+        var game = new Phaser.Game(config);
+
+        function preload() {
+            this.load.image('sky', 'assets/background.png');
+            this.load.image('ground', 'assets/platform.png');
+            this.load.image('star', 'assets/star.png');
+            this.load.image('bomb', 'assets/bomb.png');
+            this.load.image('monster', 'assets/monster/Dude_Monster.png');
+            this.load.spritesheet('monster_run_right', 'assets/monster/Dude_Monster_Run_Right.png', { frameWidth: 32, frameHeight: 32 });
+            this.load.spritesheet('monster_run_left', 'assets/monster/Dude_Monster_Run_Left.png', { frameWidth: 32, frameHeight: 32 });
+            this.load.spritesheet('monster_jump', 'assets/monster/Dude_Monster_Jump_8.png', { frameWidth: 32, frameHeight: 32 });
+            this.load.spritesheet('monster_death', 'assets/monster/Dude_Monster_Death_8.png', { frameWidth: 32, frameHeight: 32 });
+        }
+
+        function create() {
+            // A simple background for our game
+            this.add.image(400, 300, 'sky').setDisplaySize(this.cameras.main.width, this.cameras.main.height);
+
+            // The platforms group contains the ground and the 2 ledges we can jump on
+            platforms = this.physics.add.staticGroup();
+
+            // Create the ground
+            platforms.create(400, 568, 'ground').setScale(2).refreshBody();
+
+            // Create some ledges
+            platforms.create(600, 400, 'ground');
+            platforms.create(50, 250, 'ground');
+            platforms.create(750, 220, 'ground');
+
+            // The player and its settings
+            player = this.physics.add.sprite(100, 450, 'monster_run_right');
+            player.setBounce(0.2);
+            player.setCollideWorldBounds(true);
+
+            // Player animations
+            this.anims.create({
+                key: 'left',
+                frames: this.anims.generateFrameNumbers('monster_run_left', { start: 0, end: 5 }),
+                frameRate: 10,
+                repeat: -1
+            });
+
+            this.anims.create({
+                key: 'turn',
+                frames: [{ key: 'monster', frame: 0 }],
+                frameRate: 20
+            });
+
+            this.anims.create({
+                key: 'right',
+                frames: this.anims.generateFrameNumbers('monster_run_right', { start: 0, end: 5 }),
+                frameRate: 10,
+                repeat: -1
+            });
+
+            this.anims.create({
+                key: 'up',
+                frames: this.anims.generateFrameNumbers('monster_jump', { start: 0, end: 7 }),
+                frameRate: 10,
+                repeat: 0  // Alterado para 0 para que a animação de pulo não se repita
+            });
+
+            // Animação de morte do personagem
+            this.anims.create({
+                key: 'death',
+                frames: this.anims.generateFrameNumbers('monster_death', { start: 0, end: 7 }), // Ajuste conforme sua spritesheet
+                frameRate: 10,
+                repeat: 0
+            });
+
+            // Input Events for WASD keys
+            cursors = this.input.keyboard.addKeys({
+                up: Phaser.Input.Keyboard.KeyCodes.W,
+                left: Phaser.Input.Keyboard.KeyCodes.A,
+                down: Phaser.Input.Keyboard.KeyCodes.S,
+                right: Phaser.Input.Keyboard.KeyCodes.D,
+                space: Phaser.Input.Keyboard.KeyCodes.SPACE,
+            });
+
+            // Some stars to collect
+            stars = this.physics.add.group({
+                key: 'star',
+                repeat: 11,
+                setXY: { x: 12, y: 0, stepX: 70 }
+            });
+
+            stars.children.iterate(function (child) {
+                child.setBounceY(Phaser.Math.FloatBetween(0.4, 0.8));
+            });
+
+            bombs = this.physics.add.group();
+
+            // The score
+            scoreText = this.add.text(16, 16, 'score: 0', { fontSize: '32px', fill: '#000' });
+
+            // Collisions and overlaps
+            this.physics.add.collider(player, platforms);
+            this.physics.add.collider(stars, platforms);
+            this.physics.add.collider(bombs, platforms);
+            this.physics.add.overlap(player, stars, collectStar, null, this);
+            this.physics.add.collider(player, bombs, hitBomb, null, this);
+
+            // Game over text (initially hidden)
+            gameOverText = this.add.text(400, 300, 'GAME OVER', {
+                fontSize: '64px',
+                fill: '#ff0000',
+                fontStyle: 'bold'
+            }).setOrigin(0.5).setVisible(false);
+
+            restartText = this.add.text(400, 400, 'Press SPACE to Restart', {
+                fontSize: '32px',
+                fill: '#00ff00',
+                fontStyle: 'bold'
+            }).setOrigin(0.5).setVisible(false);
+        }
+
+        function update() {
+            if (gameOver) {
+                if (cursors.space.isDown) {
+                    location.reload();
+                }
+            }
+
+            if (cursors.left.isDown) {
+                player.setVelocityX(-160);
+                player.anims.play('left', true);
+            } else if (cursors.right.isDown) {
+                player.setVelocityX(160);
+                player.anims.play('right', true);
+            } else {
+                player.setVelocityX(0);
+                player.anims.play('turn');
+            }
+
+            if (cursors.up.isDown && player.body.touching.down) {
+                player.setVelocityY(-330);
+                player.anims.play('up');
+            }
+        }
+
+        function collectStar(player, star) {
+            star.disableBody(true, true);
+            score += 10;
+            scoreText.setText('Score: ' + score);
+
+            if (stars.countActive(true) === 0) {
+                stars.children.iterate(function (child) {
+                    child.enableBody(true, child.x, 0, true, true);
+                });
+
+                var x = (player.x < 400) ? Phaser.Math.Between(400, 800) : Phaser.Math.Between(0, 400);
+                var bomb = bombs.create(x, 16, 'bomb');
+                bomb.setBounce(1);
+                bomb.setCollideWorldBounds(true);
+                bomb.setVelocity(Phaser.Math.Between(-200, 200), 20);
+                bomb.allowGravity = false;
+            }
+        }
+
+        function hitBomb(player, bomb) {
+            // Pausa a física do jogo para impedir movimento
+            this.physics.pause();
+
+            // Aplica um efeito de cor (vermelho) ao personagem para indicar dano
+            player.setTint(0xff0000);
+
+            // Reproduz a animação de morte
+            player.anims.play('death');
+
+            // Define o estado de 'gameOver' para true
+            gameOver = true;
+
+            // Exibe o texto de Game Over e instruções para reiniciar
+            gameOverText.setVisible(true);
+            restartText.setVisible(true);
+        }
+
+    </script>
+
+</body>
+
+</html>
