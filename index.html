@@ -8,14 +8,22 @@
     <style type="text/css">
         body {
             margin: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            background-color: #f0f0f0;
+        }
+
+        canvas {
+            display: block;
+            /* Para remover qualquer espaçamento extra em torno do canvas */
         }
     </style>
 </head>
 
 <body>
-
     <script type="text/javascript">
-
         var config = {
             type: Phaser.AUTO,
             width: 800,
@@ -223,7 +231,6 @@
         }
 
     </script>
-
 </body>
 
 </html>
